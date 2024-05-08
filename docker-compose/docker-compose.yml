@@ -40,28 +40,35 @@ services:
         RELEASE_VERSION: 6.5.0
     links:
       - db:database
-    environment:
-        ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
-        ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
-        ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
-        CHAIN_ID: '1337'
+    # environment:
+    #     ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
+    #     ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
+    #     ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
+    #     CHAIN_ID: '1337'
 
   visualizer:
     extends:
       file: ./services/visualizer.yml
       service: visualizer
 
+  sc-verifier:
+    extends:
+      file: ./services/smart-contract-verifier.yml
+      service: smart-contract-verifier
+    ports:
+      - 8082:8050
+
   sig-provider:
     extends:
       file: ./services/sig-provider.yml
       service: sig-provider
 
-  frontend:
-    depends_on:
-      - backend
-    extends:
-      file: ./services/frontend.yml
-      service: frontend
+  # frontend:
+  #   depends_on:
+  #     - backend
+  #   extends:
+  #     file: ./services/frontend.yml
+  #     service: frontend
 
   stats-db-init:
     extends:
@@ -87,8 +94,9 @@ services:
   proxy:
     depends_on:
       - backend
-      - frontend
+      # - frontend
       - stats
+      - sc-verifier
     extends:
       file: ./services/nginx.yml
       service: proxy
