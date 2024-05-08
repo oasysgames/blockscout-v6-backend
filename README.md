@@ -58,4 +58,9 @@ This project is licensed under the GNU General Public License v3.0. See the [LIC
 
 4. Configure web-server `Access-Control-Allow-Origin` on file [default.conf.template](/docker-compose/proxy/default.conf.template)
 
-5. Start the docker by running `docker-compose up --build -d`
+5. Start the docker with external frontend by running `FRONT_PROXY_PASS=http://host.docker.internal:3000 docker compose -f external-frontend.yml up -d` [docs](https://docs.blockscout.com/for-developers/deployment/frontend-migration/separate-frontend)
+
+
+
+
+
