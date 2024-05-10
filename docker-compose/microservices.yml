@@ -45,6 +45,7 @@ services:
     depends_on:
       - visualizer
       - stats
+      - sc-verifier
     extends:
       file: ./services/nginx.yml
       service: proxy
