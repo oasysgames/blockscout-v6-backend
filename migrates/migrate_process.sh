@@ -52,7 +52,8 @@ wait
 
 # Restore dumped tables to sink database
 for table in "${tables[@]}"; do
-        PGPASSWORD=$SINK_PASS psql -h "$SINK_HOST" -p "$SINK_PORT" -U "$SINK_USER"  -d "$SINK_DB" -f "$dump_dir/$table.sql" &
+        PGPASSWORD=$SINK_PASS psql -h "$SINK_HOST" -p "$SINK_PORT" -U "$SINK_USER"  -d "$SINK_DB" -f "$dump_dir/$table.sql" 
+        wait
 done
 
 wait
