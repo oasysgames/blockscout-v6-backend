@@ -5,6 +5,7 @@ defmodule Explorer.SmartContract.Helper do
 
   alias Explorer.{Chain, Helper}
   alias Explorer.Chain.{Hash, SmartContract}
+  alias Explorer.SmartContract.Writer
   alias Phoenix.HTML
 
   def queriable_method?(method) do
@@ -25,7 +26,7 @@ defmodule Explorer.SmartContract.Helper do
   def read_with_wallet_method?(function),
     do:
       !error?(function) && !event?(function) && !constructor?(function) &&
-        !empty_outputs?(function)
+        !empty_outputs?(function) && !Writer.write_function?(function)
 
   def empty_outputs?(function), do: is_nil(function["outputs"]) || function["outputs"] == []
 
@@ -43,10 +44,7 @@ defmodule Explorer.SmartContract.Helper do
   def add_contract_code_md5(%{address_hash: address_hash_string} = attrs) when is_binary(address_hash_string) do
     with {:ok, address_hash} <- Chain.string_to_address_hash(address_hash_string),
          {:ok, address} <- Chain.hash_to_address(address_hash) do
-      contract_code_md5 = contract_code_md5(address.contract_code.bytes)
-
-      attrs
-      |> Map.put_new(:contract_code_md5, contract_code_md5)
+      attrs_extend_with_contract_code_md5(attrs, address)
     else
       _ -> attrs
     end
@@ -55,10 +53,7 @@ defmodule Explorer.SmartContract.Helper do
   def add_contract_code_md5(%{address_hash: address_hash} = attrs) do
     case Chain.hash_to_address(address_hash) do
       {:ok, address} ->
-        contract_code_md5 = contract_code_md5(address.contract_code.bytes)
-
-        attrs
-        |> Map.put_new(:contract_code_md5, contract_code_md5)
+        attrs_extend_with_contract_code_md5(attrs, address)
 
       _ ->
         attrs
@@ -71,6 +66,17 @@ defmodule Explorer.SmartContract.Helper do
     :md5
     |> :crypto.hash(bytes)
     |> Base.encode16(case: :lower)
+  end
+
+  defp attrs_extend_with_contract_code_md5(attrs, address) do
+    if address.contract_code do
+      contract_code_md5 = contract_code_md5(address.contract_code.bytes)
+
+      attrs
+      |> Map.put_new(:contract_code_md5, contract_code_md5)
+    else
+      attrs
+    end
   end
 
   def sanitize_input(nil), do: nil

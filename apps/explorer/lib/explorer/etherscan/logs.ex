@@ -5,7 +5,7 @@ defmodule Explorer.Etherscan.Logs do
 
   """
 
-  import Ecto.Query, only: [from: 2, limit: 2, where: 3, subquery: 1, order_by: 3, union: 2]
+  import Ecto.Query, only: [dynamic: 2, from: 2, limit: 2, where: 3, subquery: 1, order_by: 3, union: 2]
 
   alias Explorer.{Chain, Repo}
   alias Explorer.Chain.{Block, DenormalizationHelper, InternalTransaction, Log, Transaction}
@@ -83,7 +83,6 @@ defmodule Explorer.Etherscan.Logs do
         |> where([log], log.block_number >= ^prepared_filter.from_block)
         |> where([log], log.block_number <= ^prepared_filter.to_block)
         |> limit(1000)
-        |> order_by([log], asc: log.block_number, asc: log.index)
         |> page_logs(paging_options)
 
       all_transaction_logs_query =
@@ -105,7 +104,6 @@ defmodule Explorer.Etherscan.Logs do
       query_with_blocks =
         from(log_transaction_data in subquery(all_transaction_logs_query),
           where: log_transaction_data.address_hash == ^address_hash,
-          order_by: log_transaction_data.block_number,
           select_merge: %{
             block_consensus: log_transaction_data.block_consensus
           }
@@ -121,6 +119,7 @@ defmodule Explorer.Etherscan.Logs do
         end
 
       query_with_consensus
+      |> order_by([log], asc: log.block_number, asc: log.index)
       |> Repo.replica().all()
     else
       logs_query = where_topic_match(Log, prepared_filter)
@@ -145,16 +144,12 @@ defmodule Explorer.Etherscan.Logs do
         |> union(^query_from_address_hash_wrapped)
         |> union(^query_created_contract_address_hash_wrapped)
 
-      all_transaction_logs_query =
+      all_transaction_logs_query_base =
         from(transaction in Transaction,
           join: log in ^logs_query,
           on: log.transaction_hash == transaction.hash,
           where: transaction.block_number >= ^prepared_filter.from_block,
           where: transaction.block_number <= ^prepared_filter.to_block,
-          where:
-            transaction.to_address_hash == ^address_hash or
-              transaction.from_address_hash == ^address_hash or
-              transaction.created_contract_address_hash == ^address_hash,
           select: map(log, ^@log_fields),
           select_merge: %{
             gas_price: transaction.gas_price,
@@ -164,6 +159,17 @@ defmodule Explorer.Etherscan.Logs do
           },
           union: ^internal_transaction_log_query
         )
+
+      dynamic =
+        dynamic(
+          [transaction],
+          ^Transaction.where_transactions_to_from(address_hash) or
+            transaction.created_contract_address_hash == ^address_hash
+        )
+
+      all_transaction_logs_query =
+        all_transaction_logs_query_base
+        |> where([transaction], ^dynamic)
 
       query_with_blocks =
         from(log_transaction_data in subquery(all_transaction_logs_query),

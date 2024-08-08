@@ -40,8 +40,8 @@ defmodule BlockScoutWeb.PagingHelper do
   def allowed_stability_validators_states, do: @allowed_stability_validators_states
 
   def paging_options(%{"block_number" => block_number_string, "index" => index_string}, [:validated | _]) do
-    with {block_number, ""} <- Integer.parse(block_number_string),
-         {index, ""} <- Integer.parse(index_string) do
+    with {:ok, block_number} <- Helper.safe_parse_non_negative_integer(block_number_string),
+         {:ok, index} <- Helper.safe_parse_non_negative_integer(index_string) do
       [paging_options: %{@default_paging_options | key: {block_number, index}}]
     else
       _ ->
@@ -158,7 +158,7 @@ defmodule BlockScoutWeb.PagingHelper do
         [
           necessity_by_association: %{
             :transactions => :optional,
-            [miner: :names] => :optional,
+            [miner: [:names, :smart_contract, :proxy_implementations]] => :optional,
             :nephews => :required,
             :rewards => :optional
           },
@@ -169,7 +169,7 @@ defmodule BlockScoutWeb.PagingHelper do
         [
           necessity_by_association: %{
             :transactions => :optional,
-            [miner: :names] => :optional,
+            [miner: [:names, :smart_contract, :proxy_implementations]] => :optional,
             :rewards => :optional
           },
           block_type: "Reorg"
@@ -184,12 +184,23 @@ defmodule BlockScoutWeb.PagingHelper do
     do: [
       necessity_by_association: %{
         :transactions => :optional,
-        [miner: :names] => :optional,
+        [miner: [:names, :smart_contract, :proxy_implementations]] => :optional,
         :rewards => :optional
       },
       block_type: "Block"
     ]
 
+  @doc """
+    Removes redundant parameters from the parameter map used when calling
+    `next_page_params` function.
+
+    ## Parameters
+    - `params`: A map of parameter entries.
+
+    ## Returns
+    - A modified map without redundant parameters needed for `next_page_params` function.
+  """
+  @spec delete_parameters_from_next_page_params(map()) :: map() | nil
   def delete_parameters_from_next_page_params(params) when is_map(params) do
     params
     |> Map.drop([
@@ -202,7 +213,10 @@ defmodule BlockScoutWeb.PagingHelper do
       "q",
       "sort",
       "order",
-      "state_filter"
+      "state_filter",
+      "l2_block_range_start",
+      "l2_block_range_end",
+      "batch_number"
     ])
   end
 
@@ -303,4 +317,21 @@ defmodule BlockScoutWeb.PagingHelper do
     do: [{:dynamic, :blocks_validated, :desc_nulls_last, ValidatorStability.dynamic_validated_blocks()}]
 
   defp do_validators_stability_sorting(_, _), do: []
+
+  @spec mud_records_sorting(%{required(String.t()) => String.t()}) :: [
+          {:sorting, SortingHelper.sorting_params()}
+        ]
+  def mud_records_sorting(%{"sort" => sort_field, "order" => order}) do
+    [sorting: do_mud_records_sorting(sort_field, order)]
+  end
+
+  def mud_records_sorting(_), do: []
+
+  defp do_mud_records_sorting("key_bytes", "asc"), do: [asc_nulls_first: :key_bytes]
+  defp do_mud_records_sorting("key_bytes", "desc"), do: [desc_nulls_last: :key_bytes]
+  defp do_mud_records_sorting("key0", "asc"), do: [asc_nulls_first: :key0]
+  defp do_mud_records_sorting("key0", "desc"), do: [desc_nulls_last: :key0]
+  defp do_mud_records_sorting("key1", "asc"), do: [asc_nulls_first: :key1]
+  defp do_mud_records_sorting("key1", "desc"), do: [desc_nulls_last: :key1]
+  defp do_mud_records_sorting(_, _), do: []
 end

@@ -19,6 +19,7 @@ defmodule BlockScoutWeb.API.V2.BlockController do
 
   alias BlockScoutWeb.API.V2.{TransactionView, WithdrawalView}
   alias Explorer.Chain
+  alias Explorer.Chain.Arbitrum.Reader, as: ArbitrumReader
   alias Explorer.Chain.InternalTransaction
 
   case Application.compile_env(:explorer, :chain_type) do
@@ -30,6 +31,12 @@ defmodule BlockScoutWeb.API.V2.BlockController do
         [transactions: :beacon_blob_transaction] => :optional
       }
 
+    :optimism ->
+      @chain_type_transaction_necessity_by_association %{}
+      @chain_type_block_necessity_by_association %{
+        :op_frame_sequence => :optional
+      }
+
     :zksync ->
       @chain_type_transaction_necessity_by_association %{}
       @chain_type_block_necessity_by_association %{
@@ -37,6 +44,14 @@ defmodule BlockScoutWeb.API.V2.BlockController do
         :zksync_commit_transaction => :optional,
         :zksync_prove_transaction => :optional,
         :zksync_execute_transaction => :optional
+      }
+
+    :arbitrum ->
+      @chain_type_transaction_necessity_by_association %{}
+      @chain_type_block_necessity_by_association %{
+        :arbitrum_batch => :optional,
+        :arbitrum_commitment_transaction => :optional,
+        :arbitrum_confirmation_transaction => :optional
       }
 
     _ ->
@@ -47,25 +62,19 @@ defmodule BlockScoutWeb.API.V2.BlockController do
   @transaction_necessity_by_association [
     necessity_by_association:
       %{
-        [created_contract_address: :names] => :optional,
-        [from_address: :names] => :optional,
-        [to_address: :names] => :optional,
-        :block => :optional,
-        [created_contract_address: :smart_contract] => :optional,
-        [from_address: :smart_contract] => :optional,
-        [to_address: :smart_contract] => :optional
+        [created_contract_address: [:names, :smart_contract, :proxy_implementations]] => :optional,
+        [from_address: [:names, :smart_contract, :proxy_implementations]] => :optional,
+        [to_address: [:names, :smart_contract, :proxy_implementations]] => :optional,
+        :block => :optional
       }
       |> Map.merge(@chain_type_transaction_necessity_by_association)
   ]
 
   @internal_transaction_necessity_by_association [
     necessity_by_association: %{
-      [created_contract_address: :names] => :optional,
-      [from_address: :names] => :optional,
-      [to_address: :names] => :optional,
-      [created_contract_address: :smart_contract] => :optional,
-      [from_address: :smart_contract] => :optional,
-      [to_address: :smart_contract] => :optional
+      [created_contract_address: [:names, :smart_contract, :proxy_implementations]] => :optional,
+      [from_address: [:names, :smart_contract, :proxy_implementations]] => :optional,
+      [to_address: [:names, :smart_contract, :proxy_implementations]] => :optional
     }
   ]
 
@@ -74,21 +83,7 @@ defmodule BlockScoutWeb.API.V2.BlockController do
   @block_params [
     necessity_by_association:
       %{
-        [miner: :names] => :optional,
-        :uncles => :optional,
-        :nephews => :optional,
-        :rewards => :optional,
-        :transactions => :optional,
-        :withdrawals => :optional
-      }
-      |> Map.merge(@chain_type_block_necessity_by_association),
-    api?: true
-  ]
-
-  @block_params [
-    necessity_by_association:
-      %{
-        [miner: :names] => :optional,
+        [miner: [:names, :smart_contract, :proxy_implementations]] => :optional,
         :uncles => :optional,
         :nephews => :optional,
         :rewards => :optional,
@@ -144,6 +139,33 @@ defmodule BlockScoutWeb.API.V2.BlockController do
       |> Chain.list_blocks()
 
     {blocks, next_page} = split_list_by_page(blocks_plus_one)
+
+    next_page_params = next_page |> next_page_params(blocks, delete_parameters_from_next_page_params(params))
+
+    conn
+    |> put_status(200)
+    |> render(:blocks, %{
+      blocks: blocks |> maybe_preload_ens() |> maybe_preload_metadata(),
+      next_page_params: next_page_params
+    })
+  end
+
+  @doc """
+    Function to handle GET requests to `/api/v2/blocks/arbitrum-batch/:batch_number` endpoint.
+    It renders the list of L2 blocks bound to the specified batch.
+  """
+  @spec arbitrum_batch(Plug.Conn.t(), any()) :: Plug.Conn.t()
+  def arbitrum_batch(conn, %{"batch_number" => batch_number} = params) do
+    full_options =
+      params
+      |> select_block_type()
+      |> Keyword.merge(paging_options(params))
+      |> Keyword.merge(@api_true)
+
+    {blocks, next_page} =
+      batch_number
+      |> ArbitrumReader.batch_blocks(full_options)
+      |> split_list_by_page()
 
     next_page_params = next_page |> next_page_params(blocks, delete_parameters_from_next_page_params(params))
 
@@ -235,7 +257,10 @@ defmodule BlockScoutWeb.API.V2.BlockController do
   def withdrawals(conn, %{"block_hash_or_number" => block_hash_or_number} = params) do
     with {:ok, block} <- block_param_to_block(block_hash_or_number) do
       full_options =
-        [necessity_by_association: %{address: :optional}, api?: true]
+        [
+          necessity_by_association: %{[address: [:names, :smart_contract, :proxy_implementations]] => :optional},
+          api?: true
+        ]
         |> Keyword.merge(paging_options(params))
 
       withdrawals_plus_one = Chain.block_to_withdrawals(block.hash, full_options)

@@ -41,12 +41,12 @@ defmodule Indexer.Fetcher.InternalTransaction do
   *Note*: The internal transactions for individual transactions cannot be paginated,
   so the total number of internal transactions that could be produced is unknown.
   """
-  @spec async_fetch([Block.block_number()]) :: :ok
-  def async_fetch(block_numbers, timeout \\ 5000) when is_list(block_numbers) do
+  @spec async_fetch([Block.block_number()], boolean()) :: :ok
+  def async_fetch(block_numbers, realtime?, timeout \\ 5000) when is_list(block_numbers) do
     if InternalTransactionSupervisor.disabled?() do
       :ok
     else
-      BufferedTask.buffer(__MODULE__, block_numbers, timeout)
+      BufferedTask.buffer(__MODULE__, block_numbers, realtime?, timeout)
     end
   end
 
@@ -118,7 +118,10 @@ defmodule Indexer.Fetcher.InternalTransaction do
       {:error, reason} ->
         Logger.error(
           fn ->
-            ["failed to fetch internal transactions for blocks: ", Exception.format(:error, reason)]
+            [
+              "failed to fetch internal transactions for blocks #{inspect(filtered_unique_numbers)}: ",
+              Exception.format(:error, reason)
+            ]
           end,
           error_count: filtered_unique_numbers_count
         )
@@ -131,7 +134,10 @@ defmodule Indexer.Fetcher.InternalTransaction do
       {:error, reason, stacktrace} ->
         Logger.error(
           fn ->
-            ["failed to fetch internal transactions for blocks: ", Exception.format(:error, reason, stacktrace)]
+            [
+              "failed to fetch internal transactions for blocks #{inspect(filtered_unique_numbers)}: ",
+              Exception.format(:error, reason, stacktrace)
+            ]
           end,
           error_count: filtered_unique_numbers_count
         )

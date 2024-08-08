@@ -41,7 +41,7 @@ defmodule Indexer.TokenBalances do
   * `token_type` - type of the token that balance belongs to
   * `token_id` - token id for ERC-1155/ERC-404 tokens
   """
-  def fetch_token_balances_from_blockchain([]), do: {:ok, []}
+  def fetch_token_balances_from_blockchain([]), do: {:ok, %{fetched_token_balances: [], failed_token_balances: []}}
 
   @decorate span(tracer: Tracer)
   def fetch_token_balances_from_blockchain(token_balances) do
@@ -137,7 +137,7 @@ defmodule Indexer.TokenBalances do
         block_number: token_balance.block_number
       })
     end)
-    |> TokenBalance.async_fetch()
+    |> TokenBalance.async_fetch(false)
   end
 
   defp ignore_request_with_errors(%{value: nil, value_fetched_at: nil, error: _error}), do: false

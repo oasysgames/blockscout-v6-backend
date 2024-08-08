@@ -14,6 +14,7 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
 
   alias Explorer.{Chain, PagingOptions, Repo}
   alias Explorer.Chain.{Address, Block, CurrencyHelper, Hash, Token}
+  alias Explorer.Chain.Address.TokenBalance
 
   @default_paging_options %PagingOptions{page_size: 50}
 
@@ -84,7 +85,7 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
   def token_holders_ordered_by_value(token_contract_address_hash, options \\ []) do
     token_contract_address_hash
     |> token_holders_ordered_by_value_query_without_address_preload(options)
-    |> preload(:address)
+    |> preload(address: [:names, :smart_contract, :proxy_implementations])
   end
 
   @doc """
@@ -130,7 +131,7 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
       _ ->
         token_contract_address_hash
         |> token_holders_by_token_id_query(token_id)
-        |> preload(:address)
+        |> preload(address: [:names, :smart_contract, :proxy_implementations])
         |> order_by([tb], desc: :value, desc: :address_hash)
         |> Chain.page_token_balances(paging_options)
         |> limit(^paging_options.page_size)
@@ -320,6 +321,15 @@ defmodule Explorer.Chain.Address.CurrentTokenBalance do
       )
 
     Repo.one!(query, timeout: :infinity)
+  end
+
+  @doc """
+  Deletes all CurrentTokenBalances with given `token_contract_address_hash` and below the given `block_number`.
+  Used for cases when token doesn't implement balanceOf function
+  """
+  @spec delete_placeholders_below(Hash.Address.t(), Block.block_number()) :: {non_neg_integer(), nil | [term()]}
+  def delete_placeholders_below(token_contract_address_hash, block_number) do
+    TokenBalance.delete_token_balance_placeholders_below(__MODULE__, token_contract_address_hash, block_number)
   end
 
   @doc """

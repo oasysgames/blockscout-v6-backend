@@ -23,7 +23,7 @@ defmodule EthereumJsonrpc.MixProject do
         dialyzer: :test
       ],
       start_permanent: Mix.env() == :prod,
-      version: "6.5.0"
+      version: "6.7.2"
     ]
   end
 
@@ -62,6 +62,7 @@ defmodule EthereumJsonrpc.MixProject do
       {:credo, "~> 1.5", only: :test, runtime: false},
       # Static Type Checking
       {:dialyxir, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:ex_keccak, "~> 0.7.5"},
       # JSONRPC HTTP Post calls
       {:httpoison, "~> 2.0"},
       # Decode/Encode JSON for JSONRPC
@@ -77,7 +78,7 @@ defmodule EthereumJsonrpc.MixProject do
       # Convert unix timestamps in JSONRPC to DateTimes
       {:timex, "~> 3.7.1"},
       # Encode/decode function names and arguments
-      {:ex_abi, "~> 0.4"},
+      {:ex_abi, "~> 0.8"},
       # `:verify_fun` for `Socket.Web.connect`
       {:ssl_verify_fun, "~> 1.1"},
       # `EthereumJSONRPC.WebSocket`

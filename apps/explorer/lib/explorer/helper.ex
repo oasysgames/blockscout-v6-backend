@@ -8,6 +8,9 @@ defmodule Explorer.Helper do
   alias Explorer.Chain.Data
 
   import Ecto.Query, only: [where: 3]
+  import Explorer.Chain.SmartContract, only: [burn_address_hash_string: 0]
+
+  @max_safe_integer round(:math.pow(2, 63)) - 1
 
   @spec decode_data(binary() | map(), list()) :: list() | nil
   def decode_data("0x", types) do
@@ -68,6 +71,35 @@ defmodule Explorer.Helper do
   end
 
   @doc """
+    Converts a string to an integer, ensuring it's non-negative and within the
+    acceptable range for database insertion.
+
+    ## Examples
+
+        iex> safe_parse_non_negative_integer("0")
+        {:ok, 0}
+
+        iex> safe_parse_non_negative_integer("-1")
+        {:error, :negative_integer}
+
+        iex> safe_parse_non_negative_integer("27606393966689717254124294199939478533331961967491413693980084341759630764504")
+        {:error, :too_big_integer}
+  """
+  def safe_parse_non_negative_integer(string) do
+    case Integer.parse(string) do
+      {num, ""} ->
+        case num do
+          _ when num > @max_safe_integer -> {:error, :too_big_integer}
+          _ when num < 0 -> {:error, :negative_integer}
+          _ -> {:ok, num}
+        end
+
+      _ ->
+        {:error, :invalid_integer}
+    end
+  end
+
+  @doc """
     Function to preload a `struct` for each element of the `list`.
     You should specify a primary key for a `struct` in `references_field`,
     and the list element's foreign key in `foreign_key_field`.
@@ -90,33 +122,24 @@ defmodule Explorer.Helper do
   Decode json
   """
   @spec decode_json(any()) :: map() | list() | nil
-  def decode_json(nil), do: nil
+  def decode_json(data, nft? \\ false)
 
-  def decode_json(data) do
+  def decode_json(nil, _), do: nil
+
+  def decode_json(data, nft?) do
     if String.valid?(data) do
-      safe_decode_json(data)
+      safe_decode_json(data, nft?)
     else
       data
       |> :unicode.characters_to_binary(:latin1)
-      |> safe_decode_json()
+      |> safe_decode_json(nft?)
     end
   end
 
-  defp safe_decode_json(data) do
+  defp safe_decode_json(data, nft?) do
     case Jason.decode(data) do
       {:ok, decoded} -> decoded
-      _ -> %{error: data}
-    end
-  end
-
-  @doc """
-    Tries to decode binary to json, return either decoded object, or initial binary
-  """
-  @spec maybe_decode(binary) :: any
-  def maybe_decode(data) do
-    case safe_decode_json(data) do
-      %{error: _} -> data
-      decoded -> decoded
+      _ -> if nft?, do: {:error, data}, else: %{error: data}
     end
   end
 
@@ -144,4 +167,25 @@ defmodule Explorer.Helper do
   end
 
   def valid_url?(_), do: false
+
+  @doc """
+  Compare two values and returns either :lt, :eq or :gt.
+
+  Please be careful: this function compares arguments using `<` and `>`,
+  hence it should not be used to compare structures (for instance %DateTime{} or %Decimal{}).
+  """
+  @spec compare(term(), term()) :: :lt | :eq | :gt
+  def compare(a, b) do
+    cond do
+      a < b -> :lt
+      a > b -> :gt
+      true -> :eq
+    end
+  end
+
+  def truncate_address_hash(nil), do: burn_address_hash_string()
+
+  def truncate_address_hash("0x000000000000000000000000" <> truncated_hash) do
+    "0x#{truncated_hash}"
+  end
 end

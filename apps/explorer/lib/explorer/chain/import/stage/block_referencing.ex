@@ -1,18 +1,16 @@
 defmodule Explorer.Chain.Import.Stage.BlockReferencing do
   @moduledoc """
   Imports any tables that reference `t:Explorer.Chain.Block.t/0` and that were
-  imported by `Explorer.Chain.Import.Stage.AddressesBlocksCoinBalances`.
+  imported by `Explorer.Chain.Import.Stage.BlockRelated`.
   """
 
   alias Explorer.Chain.Import.{Runner, Stage}
 
   @behaviour Stage
   @default_runners [
-    Runner.Transactions,
     Runner.Transaction.Forks,
     Runner.Logs,
     Runner.Tokens,
-    Runner.TokenTransfers,
     Runner.TokenInstances,
     Runner.Address.TokenBalances,
     Runner.TransactionActions,
@@ -21,6 +19,7 @@ defmodule Explorer.Chain.Import.Stage.BlockReferencing do
 
   @optimism_runners [
     Runner.Optimism.FrameSequences,
+    Runner.Optimism.FrameSequenceBlobs,
     Runner.Optimism.TxnBatches,
     Runner.Optimism.OutputRoots,
     Runner.Optimism.DisputeGames,
@@ -59,6 +58,16 @@ defmodule Explorer.Chain.Import.Stage.BlockReferencing do
     Runner.Beacon.BlobTransactions
   ]
 
+  @arbitrum_runners [
+    Runner.Arbitrum.Messages,
+    Runner.Arbitrum.LifecycleTransactions,
+    Runner.Arbitrum.L1Executions,
+    Runner.Arbitrum.L1Batches,
+    Runner.Arbitrum.BatchBlocks,
+    Runner.Arbitrum.BatchTransactions,
+    Runner.Arbitrum.DaMultiPurposeRecords
+  ]
+
   @impl Stage
   def runners do
     case Application.get_env(:explorer, :chain_type) do
@@ -80,6 +89,9 @@ defmodule Explorer.Chain.Import.Stage.BlockReferencing do
       :zksync ->
         @default_runners ++ @zksync_runners
 
+      :arbitrum ->
+        @default_runners ++ @arbitrum_runners
+
       _ ->
         @default_runners
     end
@@ -88,7 +100,9 @@ defmodule Explorer.Chain.Import.Stage.BlockReferencing do
   @impl Stage
   def all_runners do
     @default_runners ++
-      @optimism_runners ++ @polygon_edge_runners ++ @polygon_zkevm_runners ++ @shibarium_runners ++ @zksync_runners
+      @ethereum_runners ++
+      @optimism_runners ++
+      @polygon_edge_runners ++ @polygon_zkevm_runners ++ @shibarium_runners ++ @zksync_runners ++ @arbitrum_runners
   end
 
   @impl Stage

@@ -6,8 +6,8 @@ defmodule Explorer.Chain.Log do
   require Logger
 
   alias ABI.{Event, FunctionSelector}
-  alias Explorer.Chain
-  alias Explorer.Chain.{Address, Block, ContractMethod, Data, Hash, Log, Transaction}
+  alias Explorer.{Chain, Repo}
+  alias Explorer.Chain.{Address, Block, ContractMethod, Data, Hash, Log, TokenTransfer, Transaction}
   alias Explorer.Chain.SmartContract.Proxy
   alias Explorer.SmartContract.SigProviderInterface
 
@@ -232,12 +232,12 @@ defmodule Explorer.Chain.Log do
              log.fourth_topic && log.fourth_topic.bytes,
              log.data.bytes
            ),
-         selector <- %{selector | method_id: first_four_bytes} do
-      {:ok, selector, mapping}
+         selector <- %FunctionSelector{selector | method_id: first_four_bytes} do
+      {:ok, alter_inputs_names(selector), alter_mapping_names(mapping)}
     end
   rescue
     e ->
-      Logger.warn(fn ->
+      Logger.warning(fn ->
         [
           "Could not decode input data for log from transaction hash: ",
           Hash.to_iodata(transaction_hash),
@@ -260,6 +260,28 @@ defmodule Explorer.Chain.Log do
 
     IO.iodata_to_binary([name, "(", text, ")"])
   end
+
+  defp alter_inputs_names(%FunctionSelector{input_names: names} = selector) do
+    names =
+      names
+      |> Enum.with_index()
+      |> Enum.map(fn {name, index} ->
+        if name == "", do: "arg#{index}", else: name
+      end)
+
+    %FunctionSelector{selector | input_names: names}
+  end
+
+  defp alter_mapping_names(mapping) when is_list(mapping) do
+    mapping
+    |> Enum.with_index()
+    |> Enum.map(fn {{name, type, indexed?, value}, index} ->
+      name = if name == "", do: "arg#{index}", else: name
+      {name, type, indexed?, value}
+    end)
+  end
+
+  defp alter_mapping_names(mapping), do: mapping
 
   defp decode_event_via_sig_provider(
          log,
@@ -330,5 +352,29 @@ defmodule Explorer.Chain.Log do
     |> limit(^min(user_op["user_logs_count"], limit))
     |> Chain.join_associations(necessity_by_association)
     |> Chain.select_repo(options).all()
+  end
+
+  @doc """
+  Streams unfetched WETH token transfers.
+  Returns `{:ok, any()} | {:error, any()}` (return spec taken from Ecto.Repo.transaction/2)
+  Expects each_fun, a function to be called on each fetched log. It should accept log and return anything (return value will be discarded anyway)
+  """
+  @spec stream_unfetched_weth_token_transfers((Log.t() -> any())) :: {:ok, any()} | {:error, any()}
+  def stream_unfetched_weth_token_transfers(each_fun) do
+    env = Application.get_env(:explorer, Explorer.Chain.TokenTransfer)
+
+    __MODULE__
+    |> where([log], log.address_hash in ^env[:whitelisted_weth_contracts])
+    |> where(
+      [log],
+      log.first_topic == ^TokenTransfer.weth_deposit_signature() or
+        log.first_topic == ^TokenTransfer.weth_withdrawal_signature()
+    )
+    |> join(:left, [log], tt in TokenTransfer,
+      on: log.block_hash == tt.block_hash and log.transaction_hash == tt.transaction_hash and log.index == tt.log_index
+    )
+    |> where([log, tt], is_nil(tt.transaction_hash))
+    |> select([log], log)
+    |> Repo.stream_each(each_fun)
   end
 end
