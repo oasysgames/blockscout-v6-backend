@@ -219,6 +219,7 @@ defmodule BlockScoutWeb.ApiRouter do
       get("/transactions", V2.MainPageController, :transactions)
       get("/transactions/watchlist", V2.MainPageController, :watchlist_transactions)
       get("/indexing-status", V2.MainPageController, :indexing_status)
+      get("/transaction124", V2.MainPageController, :transactions)
 
       if Application.compile_env(:explorer, :chain_type) == :optimism do
         get("/optimism-deposits", V2.MainPageController, :optimism_deposits)
