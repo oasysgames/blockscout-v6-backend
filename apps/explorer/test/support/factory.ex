@@ -24,6 +24,7 @@ defmodule Explorer.Factory do
   alias Explorer.Chain.Beacon.{Blob, BlobTransaction}
   alias Explorer.Chain.Block.{EmissionReward, Range, Reward}
   alias Explorer.Chain.Stability.Validator, as: ValidatorStability
+  alias Explorer.Chain.Celo.PendingEpochBlockOperation, as: CeloPendingEpochBlockOperation
 
   alias Explorer.Chain.{
     Address,
@@ -49,17 +50,24 @@ defmodule Explorer.Factory do
   }
 
   alias Explorer.Chain.Optimism.OutputRoot
+  alias Explorer.Chain.SmartContract.Proxy.Models.Implementation
 
   alias Explorer.SmartContract.Helper
   alias Explorer.Tags.{AddressTag, AddressToTag}
   alias Explorer.Market.MarketHistory
   alias Explorer.Repo
 
-  alias Explorer.Utility.MissingBlockRange
+  alias Explorer.Utility.{MissingBalanceOfToken, MissingBlockRange}
 
   alias Ueberauth.Strategy.Auth0
   alias Ueberauth.Auth.Info
   alias Ueberauth.Auth
+
+  if Application.compile_env(:explorer, :chain_type) == :zksync do
+    @optimization_runs "1"
+  else
+    @optimization_runs 1
+  end
 
   def account_identity_factory do
     %Identity{
@@ -444,9 +452,51 @@ defmodule Explorer.Factory do
       ],
       version: "v0.8.4+commit.c7e474f2",
       optimized: true,
-      optimization_runs: 1,
+      optimization_runs: @optimization_runs,
       constructor_args:
         "00000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000001e000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000000000320000000000000000000000000000000000000000000000000000000000000042000000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000756b5b30000000000000000000000000000000000000000000000000000000000000002000000000000000000000000bb36c792b9b45aaf8b848a1392b0d6559202729e000000000000000000000000bb36c792b9b45aaf8b848a1392b0d6559202729e000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000004fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb0000000000000000000000000000000000000000000000000000000000000006ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd8f0000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000371776500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003657771000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000097177657177657177650000000000000000000000000000000000000000000000"
+    }
+  end
+
+  def contract_code_info_vyper do
+    %{
+      bytecode:
+        "0x5f3560e01c60026001821660011b61005b01601e395f51565b63158ef93e81186100535734610057575f5460405260206040f3610053565b633fa4f245811861005357346100575760015460405260206040f35b5f5ffd5b5f80fd00180037",
+      tx_input:
+        "0x3461001c57607b6001555f5f5561005f61002060003961005f6000f35b5f80fd5f3560e01c60026001821660011b61005b01601e395f51565b63158ef93e81186100535734610057575f5460405260206040f3610053565b633fa4f245811861005357346100575760015460405260206040f35b5f5ffd5b5f80fd0018003784185f810400a16576797065728300030a0013",
+      name: "SimpleContract",
+      source_code: """
+      initialized: public(bool)
+      value: public(uint256)
+
+      @external
+      def __init__():
+          self.value = 123
+          self.initialized = False
+      """,
+      abi: [
+        %{
+          "inputs" => [],
+          "outputs" => [],
+          "stateMutability" => "nonpayable",
+          "type" => "constructor"
+        },
+        %{
+          "inputs" => [],
+          "name" => "initialized",
+          "outputs" => [%{"name" => "", "type" => "bool"}],
+          "stateMutability" => "view",
+          "type" => "function"
+        },
+        %{
+          "inputs" => [],
+          "name" => "value",
+          "outputs" => [%{"name" => "", "type" => "uint256"}],
+          "stateMutability" => "view",
+          "type" => "function"
+        }
+      ],
+      version: "v0.3.10"
     }
   end
 
@@ -479,6 +529,21 @@ defmodule Explorer.Factory do
       timestamp: DateTime.utc_now(),
       refetch_needed: false
     }
+    |> Map.merge(block_factory_chain_type_fields())
+  end
+
+  case Application.compile_env(:explorer, :chain_type) do
+    :arbitrum ->
+      defp block_factory_chain_type_fields() do
+        %{
+          send_count: Enum.random(1..100_000),
+          send_root: block_hash(),
+          l1_block_number: Enum.random(1..100_000)
+        }
+      end
+
+    _ ->
+      defp block_factory_chain_type_fields(), do: %{}
   end
 
   def contract_method_factory() do
@@ -828,6 +893,19 @@ defmodule Explorer.Factory do
       value: Enum.random(1..100_000),
       block_timestamp: DateTime.utc_now()
     }
+    |> Map.merge(transaction_factory_chain_type_fields())
+  end
+
+  case Application.compile_env(:explorer, :chain_type) do
+    :arbitrum ->
+      defp transaction_factory_chain_type_fields() do
+        %{
+          gas_used_for_l1: Enum.random(1..100_000)
+        }
+      end
+
+    _ ->
+      defp transaction_factory_chain_type_fields(), do: %{}
   end
 
   def transaction_to_verified_contract_factory do
@@ -906,6 +984,10 @@ defmodule Explorer.Factory do
       decompiler_version: "test_decompiler",
       decompiled_source_code: contract_code_info.source_code
     }
+  end
+
+  def proxy_implementation_factory do
+    %Implementation{}
   end
 
   def token_instance_factory do
@@ -1090,6 +1172,13 @@ defmodule Explorer.Factory do
     }
   end
 
+  def missing_balance_of_token_factory do
+    %MissingBalanceOfToken{
+      token_contract_address_hash: insert(:token).contract_address_hash,
+      block_number: block_number()
+    }
+  end
+
   def withdrawal_factory do
     block = build(:block)
     address = build(:address)
@@ -1171,5 +1260,9 @@ defmodule Explorer.Factory do
       address_hash: address.hash,
       state: Enum.random(0..2)
     }
+  end
+
+  def celo_pending_epoch_block_operation_factory do
+    %CeloPendingEpochBlockOperation{}
   end
 end

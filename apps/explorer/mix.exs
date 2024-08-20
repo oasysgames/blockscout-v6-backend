@@ -24,8 +24,8 @@ defmodule Explorer.Mixfile do
         dialyzer: :test
       ],
       start_permanent: Mix.env() == :prod,
-      version: "6.5.0",
-      xref: [exclude: [BlockScoutWeb.WebRouter.Helpers, Indexer.Helper]]
+      version: "6.8.0",
+      xref: [exclude: [BlockScoutWeb.Routers.WebRouter.Helpers, Indexer.Helper]]
     ]
   end
 
@@ -69,7 +69,7 @@ defmodule Explorer.Mixfile do
       {:comeonin, "~> 5.3"},
       {:credo, "~> 1.5", only: :test, runtime: false},
       # For Absinthe to load data in batches
-      {:dataloader, "~> 1.0.0"},
+      {:dataloader, "~> 2.0.0"},
       {:decimal, "~> 2.0"},
       {:dialyxir, "~> 1.1", only: [:dev, :test], runtime: false},
       # `override: true` for `ex_machina` compatibility
@@ -78,6 +78,7 @@ defmodule Explorer.Mixfile do
       {:ecto_sql, "~> 3.3"},
       # JSONRPC access to query smart contracts
       {:ethereum_jsonrpc, in_umbrella: true},
+      {:ex_keccak, "~> 0.7.5"},
       # Data factory for testing
       {:ex_machina, "~> 2.3", only: [:test]},
       {:exvcr, "~> 0.10", only: :test},
@@ -88,7 +89,7 @@ defmodule Explorer.Mixfile do
       {:logger_file_backend, "~> 0.0.10"},
       {:math, "~> 0.7.0"},
       {:mock, "~> 0.3.0", only: [:test], runtime: false},
-      {:mox, "~> 1.0", only: [:test]},
+      {:mox, "~> 1.0"},
       {:phoenix_html, "== 3.0.4"},
       {:poison, "~> 4.0.1"},
       {:nimble_csv, "~> 1.1"},
@@ -109,17 +110,19 @@ defmodule Explorer.Mixfile do
       # `:spandex` tracing of `:ecto`
       {:spandex_ecto, "~> 0.7.0"},
       # Attach `:prometheus_ecto` to `:ecto`
-      {:telemetry, "~> 0.4.3"},
+      {:telemetry, "~> 1.2.1"},
       # `Timex.Duration` for `Explorer.Counters.AverageBlockTime.average_block_time/0`
       {:timex, "~> 3.7.1"},
       {:con_cache, "~> 1.0"},
-      {:tesla, "~> 1.9.0"},
+      {:tesla, "~> 1.12.1"},
       {:cbor, "~> 1.0"},
       {:cloak_ecto, "~> 1.3.0"},
       {:redix, "~> 1.1"},
       {:hammer_backend_redis, "~> 6.1"},
       {:logger_json, "~> 5.1"},
-      {:typed_ecto_schema, "~> 0.4.1", runtime: false}
+      {:typed_ecto_schema, "~> 0.4.1", runtime: false},
+      {:ueberauth, "~> 0.7"},
+      {:recon, "~> 2.5"}
     ]
   end
 

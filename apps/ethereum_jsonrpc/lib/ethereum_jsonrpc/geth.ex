@@ -50,6 +50,7 @@ defmodule EthereumJSONRPC.Geth do
 
       parsed_timeout ->
         json_rpc_named_arguments
+        |> Keyword.update(:transport_options, [http_options: []], &Keyword.put_new(&1, :http_options, []))
         |> put_in([:transport_options, :http_options, :timeout], parsed_timeout)
         |> put_in([:transport_options, :http_options, :recv_timeout], parsed_timeout)
     end
@@ -59,7 +60,31 @@ defmodule EthereumJSONRPC.Geth do
   Fetches the first trace from the trace URL.
   """
   @impl EthereumJSONRPC.Variant
-  def fetch_first_trace(_transactions_params, _json_rpc_named_arguments), do: :ignore
+  def fetch_first_trace(transactions_params, json_rpc_named_arguments) when is_list(transactions_params) do
+    id_to_params = id_to_params(transactions_params)
+
+    json_rpc_named_arguments_corrected_timeout = correct_timeouts(json_rpc_named_arguments)
+
+    with {:ok, responses} <-
+           id_to_params
+           |> debug_trace_transaction_requests(true)
+           |> json_rpc(json_rpc_named_arguments_corrected_timeout),
+         {:ok, traces} <-
+           debug_trace_transaction_responses_to_internal_transactions_params(
+             responses,
+             id_to_params,
+             json_rpc_named_arguments_corrected_timeout
+           ) do
+      case {traces, transactions_params} do
+        {[%{} = first_trace | _], [%{block_hash: block_hash} | _]} ->
+          {:ok,
+           [%{first_trace: first_trace, block_hash: block_hash, json_rpc_named_arguments: json_rpc_named_arguments}]}
+
+        _ ->
+          {:error, :not_found}
+      end
+    end
+  end
 
   @doc """
   Fetches the `t:Explorer.Chain.InternalTransaction.changeset/2` params from the Geth trace URL.
@@ -85,6 +110,23 @@ defmodule EthereumJSONRPC.Geth do
         transactions_id_to_params,
         json_rpc_named_arguments
       )
+    end
+  end
+
+  @doc """
+  Fetches the raw traces from the Geth trace URL.
+  """
+  @impl EthereumJSONRPC.Variant
+  def fetch_transaction_raw_traces(%{hash: transaction_hash}, json_rpc_named_arguments) do
+    request = debug_trace_transaction_request(%{id: 0, hash_data: to_string(transaction_hash)}, false)
+
+    case json_rpc(request, json_rpc_named_arguments) do
+      {:ok, traces} ->
+        {:ok, traces}
+
+      {:error, error} ->
+        Logger.error(inspect(error))
+        {:error, error}
     end
   end
 
@@ -142,9 +184,9 @@ defmodule EthereumJSONRPC.Geth do
     PendingTransaction.fetch_pending_transactions_geth(json_rpc_named_arguments)
   end
 
-  def debug_trace_transaction_requests(id_to_params) when is_map(id_to_params) do
+  def debug_trace_transaction_requests(id_to_params, only_first_trace \\ false) when is_map(id_to_params) do
     Enum.map(id_to_params, fn {id, %{hash_data: hash_data}} ->
-      debug_trace_transaction_request(%{id: id, hash_data: hash_data})
+      debug_trace_transaction_request(%{id: id, hash_data: hash_data}, only_first_trace)
     end)
   end
 
@@ -156,13 +198,13 @@ defmodule EthereumJSONRPC.Geth do
   @external_resource @tracer_path
   @tracer File.read!(@tracer_path)
 
-  defp debug_trace_transaction_request(%{id: id, hash_data: hash_data}) do
+  defp debug_trace_transaction_request(%{id: id, hash_data: hash_data}, only_first_trace) do
     debug_trace_timeout = Application.get_env(:ethereum_jsonrpc, __MODULE__)[:debug_trace_timeout]
 
     request(%{
       id: id,
       method: "debug_traceTransaction",
-      params: [hash_data, %{timeout: debug_trace_timeout} |> Map.merge(tracer_params())]
+      params: [hash_data, %{timeout: debug_trace_timeout} |> Map.merge(tracer_params(only_first_trace))]
     })
   end
 
@@ -179,7 +221,7 @@ defmodule EthereumJSONRPC.Geth do
     })
   end
 
-  defp tracer_params do
+  defp tracer_params(only_first_trace \\ false) do
     cond do
       tracer_type() == "js" ->
         %{"tracer" => @tracer}
@@ -193,7 +235,11 @@ defmodule EthereumJSONRPC.Geth do
         }
 
       true ->
-        %{"tracer" => "callTracer"}
+        if only_first_trace do
+          %{"tracer" => "callTracer", "tracerConfig" => %{"onlyTopCall" => true}}
+        else
+          %{"tracer" => "callTracer"}
+        end
     end
   end
 
@@ -365,37 +411,28 @@ defmodule EthereumJSONRPC.Geth do
     [Map.put(last, "error", "execution stopped") | acc]
   end
 
+  # credo:disable-for-next-line /Complexity/
   defp parse_call_tracer_calls({%{"type" => upcase_type, "from" => from} = call, index}, acc, trace_address, inner?) do
     case String.downcase(upcase_type) do
       type when type in ~w(call callcode delegatecall staticcall create create2 selfdestruct revert stop invalid) ->
         new_trace_address = [index | trace_address]
 
-        formatted_call =
-          %{
-            "type" => if(type in ~w(call callcode delegatecall staticcall), do: "call", else: type),
-            "callType" => type,
-            "from" => from,
-            "to" => Map.get(call, "to", "0x"),
-            "createdContractAddressHash" => Map.get(call, "to", "0x"),
-            "value" => Map.get(call, "value", "0x0"),
-            "gas" => Map.get(call, "gas", "0x0"),
-            "gasUsed" => Map.get(call, "gasUsed", "0x0"),
-            "input" => Map.get(call, "input", "0x"),
-            "init" => Map.get(call, "input", "0x"),
-            "createdContractCode" => Map.get(call, "output", "0x"),
-            "traceAddress" => if(inner?, do: Enum.reverse(new_trace_address), else: []),
-            "error" => call["error"]
-          }
-          |> case do
-            %{"error" => nil} = ok_call ->
-              ok_call
-              |> Map.delete("error")
-              # to handle staticcall, all other cases handled by EthereumJSONRPC.Geth.Call.elixir_to_internal_transaction_params/1
-              |> Map.put("output", Map.get(call, "output", "0x"))
-
-            error_call ->
-              error_call
-          end
+        formatted_call = %{
+          "type" => if(type in ~w(call callcode delegatecall staticcall), do: "call", else: type),
+          "callType" => type,
+          "from" => from,
+          "to" => Map.get(call, "to", "0x"),
+          "createdContractAddressHash" => Map.get(call, "to", "0x"),
+          "value" => Map.get(call, "value", "0x0"),
+          "gas" => Map.get(call, "gas", "0x0"),
+          "gasUsed" => Map.get(call, "gasUsed", "0x0"),
+          "input" => Map.get(call, "input", "0x"),
+          "output" => Map.get(call, "output", "0x"),
+          "init" => Map.get(call, "input", "0x"),
+          "createdContractCode" => Map.get(call, "output", "0x"),
+          "traceAddress" => if(inner?, do: Enum.reverse(new_trace_address), else: []),
+          "error" => call["error"]
+        }
 
         parse_call_tracer_calls(
           Map.get(call, "calls", []),
@@ -403,8 +440,12 @@ defmodule EthereumJSONRPC.Geth do
           if(inner?, do: new_trace_address, else: [])
         )
 
+      "" ->
+        unless allow_empty_traces?(), do: log_unknown_type(call)
+        acc
+
       _unknown_type ->
-        Logger.warning("Call from a callTracer with an unknown type: #{inspect(call)}")
+        log_unknown_type(call)
         acc
     end
   end
@@ -413,6 +454,10 @@ defmodule EthereumJSONRPC.Geth do
     calls
     |> Stream.with_index()
     |> Enum.reduce(acc, &parse_call_tracer_calls(&1, &2, trace_address))
+  end
+
+  defp log_unknown_type(call) do
+    Logger.warning("Call from a callTracer with an unknown type: #{inspect(call)}")
   end
 
   @spec reduce_internal_transactions_params(list()) :: {:ok, list()} | {:error, list()}
@@ -450,5 +495,9 @@ defmodule EthereumJSONRPC.Geth do
 
   defp tracer_type do
     Application.get_env(:ethereum_jsonrpc, __MODULE__)[:tracer]
+  end
+
+  defp allow_empty_traces? do
+    Application.get_env(:ethereum_jsonrpc, __MODULE__)[:allow_empty_traces?]
   end
 end

@@ -26,6 +26,8 @@ defmodule Explorer.Chain.Address do
   }
 
   alias Explorer.Chain.Cache.{Accounts, NetVersion}
+  alias Explorer.Chain.SmartContract.Proxy
+  alias Explorer.Chain.SmartContract.Proxy.Models.Implementation
 
   @optional_attrs ~w(contract_code fetched_coin_balance fetched_coin_balance_block_number nonce decompiled verified gas_used transactions_count token_transfers_count)a
   @required_attrs ~w(hash)a
@@ -93,8 +95,12 @@ defmodule Explorer.Chain.Address do
     field(:ens_domain_name, :string, virtual: true)
     field(:metadata, :any, virtual: true)
 
+    # todo: remove virtual field for a single implementation when frontend is bound to "implementations" object value in API
+    field(:implementation, :any, virtual: true)
+
     has_one(:smart_contract, SmartContract, references: :hash)
     has_one(:token, Token, foreign_key: :contract_address_hash, references: :hash)
+    has_one(:proxy_implementations, Implementation, foreign_key: :proxy_address_hash, references: :hash)
 
     has_one(
       :contracts_creation_internal_transaction,
@@ -139,6 +145,17 @@ defmodule Explorer.Chain.Address do
     |> unique_constraint(:hash)
   end
 
+  @spec get(Hash.Address.t(), [Chain.necessity_by_association_option() | Chain.api?()]) :: t() | nil
+  def get(hash, options) do
+    necessity_by_association = Keyword.get(options, :necessity_by_association, %{})
+
+    query = from(address in Address, where: address.hash == ^hash)
+
+    query
+    |> Chain.join_associations(necessity_by_association)
+    |> Chain.select_repo(options).one()
+  end
+
   def checksum(address_or_hash, iodata? \\ false)
 
   def checksum(nil, _iodata?), do: ""
@@ -178,7 +195,7 @@ defmodule Explorer.Chain.Address do
     |> stream_binary()
     |> Stream.zip(match_byte_stream)
     |> Enum.map(fn
-      {digit, _} when digit in '0123456789' ->
+      {digit, _} when digit in ~c"0123456789" ->
         digit
 
       {alpha, 1} ->
@@ -206,7 +223,7 @@ defmodule Explorer.Chain.Address do
     |> stream_binary()
     |> Stream.zip(match_byte_stream)
     |> Enum.map(fn
-      {digit, _} when digit in '0123456789' ->
+      {digit, _} when digit in ~c"0123456789" ->
         digit
 
       {alpha, 1} ->
@@ -358,7 +375,7 @@ defmodule Explorer.Chain.Address do
           from(a in Address,
             where: a.fetched_coin_balance > ^0,
             order_by: [desc: a.fetched_coin_balance, asc: a.hash],
-            preload: [:names, :smart_contract],
+            preload: [:names, :smart_contract, :proxy_implementations],
             select: {a, a.transactions_count}
           )
 
@@ -445,5 +462,25 @@ defmodule Explorer.Chain.Address do
       [set: [contract_code: contract_code, updated_at: now]],
       timeout: @timeout
     )
+  end
+
+  @doc """
+  Prepares implementations object and proxy type from address
+  """
+  @spec parse_implementation_and_proxy_type(__MODULE__.t()) :: {list(), String.t() | nil}
+  def parse_implementation_and_proxy_type(address) do
+    with %__MODULE__{
+           proxy_implementations: %Implementation{
+             address_hashes: address_hashes,
+             names: names,
+             proxy_type: proxy_type
+           }
+         } <- address,
+         false <- address_hashes && Enum.empty?(address_hashes) do
+      {Proxy.proxy_object_info(address_hashes, names), proxy_type}
+    else
+      _ ->
+        {[], nil}
+    end
   end
 end
