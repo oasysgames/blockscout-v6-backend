@@ -121,6 +121,9 @@ defmodule Explorer.Chain do
 
   @limit_showing_transactions 10_000
 
+  @op_node_to_address_hash "0x4200000000000000000000000000000000000015"
+  @op_node_from_address_hash "0xDeaDDEaDDeAdDeAdDEAdDEaddeAddEAdDEAd0001"
+
   @typedoc """
   The name of an association on the `t:Ecto.Schema.t/0`
   """
@@ -1637,6 +1640,57 @@ defmodule Explorer.Chain do
     end
   end
 
+  @doc """
+  Finds all `t:Explorer.Chain.Transaction.t/0` in the `t:Explorer.Chain.Block.t/0`.
+
+  ## Options
+
+    * `:necessity_by_association` - use to load `t:association/0` as `:required` or `:optional`.  If an association is
+        `:required`, and the `t:Explorer.Chain.Block.t/0` has no associated record for that association, then the
+        `t:Explorer.Chain.Block.t/0` will not be included in the page `entries`.
+    * `:paging_options` - a `t:Explorer.PagingOptions.t/0` used to specify the `:page_size` and
+      `:key` (a tuple of the lowest/oldest `{block_number}`). Results will be the internal
+      transactions older than the `block_number` that are passed.
+    * ':block_type' - use to filter by type of block; Uncle`, `Reorg`, or `Block` (default).
+
+  """
+  @spec list_blocks_for_home([paging_options | necessity_by_association_option | api?]) :: [Block.t()]
+  def list_blocks_for_home(options \\ []) when is_list(options) do
+    necessity_by_association = Keyword.get(options, :necessity_by_association, %{})
+    paging_options = Keyword.get(options, :paging_options) || @default_paging_options
+    block_type = Keyword.get(options, :block_type, "Block")
+
+    newest_transactions = transactions_available_for_home(paging_options.page_size)
+    newest_blocks = Enum.map(newest_transactions, fn wa -> wa.block_number end)
+    count = Enum.count(newest_blocks)
+
+    case paging_options do
+      %PagingOptions{key: {0}} ->
+        []
+
+      _ ->
+        Block
+        |> join_associations(necessity_by_association)
+        |> where([block], block.number in ^newest_blocks)
+        |> page_blocks(paging_options)
+        |> limit(^paging_options.page_size)
+        |> order_by(desc: :number)
+        |> select_repo(options).all()
+    end
+  end
+
+  def transactions_available_for_home(page_size) do
+    {:ok, to_address_filter} = Chain.string_to_address_hash(@op_node_to_address_hash)
+    {:ok, from_address_filter} = Chain.string_to_address_hash(@op_node_from_address_hash)
+
+    Transaction
+    |> where([transaction], not is_nil(transaction.block_number) and not is_nil(transaction.index)
+        and transaction.to_address_hash != ^to_address_filter and transaction.from_address_hash != ^from_address_filter)
+    |> limit(^page_size)
+    |> order_by(desc: :block_number)
+    |> select_repo([]).all()
+  end
+
   defp block_from_cache(block_type, paging_options, necessity_by_association, options) do
     case Blocks.take_enough(paging_options.page_size) do
       nil ->
@@ -2603,6 +2657,61 @@ defmodule Explorer.Chain do
       type_filter,
       options
     )
+  end
+
+  @doc """
+  Returns the paged list of collated transactions that occurred recently from newest to oldest using `block_number`
+  and `index`.
+
+      iex> newest_first_transactions = 50 |> insert_list(:transaction) |> with_block() |> Enum.reverse()
+      iex> oldest_seen = Enum.at(newest_first_transactions, 9)
+      iex> paging_options = %Explorer.PagingOptions{page_size: 10, key: {oldest_seen.block_number, oldest_seen.index}}
+      iex> recent_collated_transactions = Explorer.Chain.recent_collated_transactions_for_home(true, paging_options: paging_options)
+      iex> length(recent_collated_transactions)
+      10
+      iex> hd(recent_collated_transactions).hash == Enum.at(newest_first_transactions, 10).hash
+      true
+
+  ## Options
+
+    * `:necessity_by_association` - use to load `t:association/0` as `:required` or `:optional`.  If an association is
+      `:required`, and the `t:Explorer.Chain.Transaction.t/0` has no associated record for that association,
+      then the `t:Explorer.Chain.Transaction.t/0` will not be included in the list.
+    * `:paging_options` - a `t:Explorer.PagingOptions.t/0` used to specify the `:page_size` and
+      `:key` (a tuple of the lowest/oldest `{block_number, index}`) and. Results will be the transactions older than
+      the `block_number` and `index` that are passed.
+
+  """
+  @spec recent_collated_transactions_for_home(true | false, [paging_options | necessity_by_association_option | api?]) :: [
+    Transaction.t()
+  ]
+  def recent_collated_transactions_for_home(old_ui?, options \\ [])
+      when is_list(options) do
+    necessity_by_association = Keyword.get(options, :necessity_by_association, %{})
+    paging_options = Keyword.get(options, :paging_options, @default_paging_options)
+    {:ok, to_address_filter} = Chain.string_to_address_hash(@op_node_to_address_hash)
+    {:ok, from_address_filter} = Chain.string_to_address_hash(@op_node_from_address_hash)
+
+    case paging_options do
+      %PagingOptions{key: {0, 0}, is_index_in_asc_order: false} ->
+        []
+      _ ->
+        paging_options
+        |> Transaction.fetch_transactions()
+        |> where([transaction], not is_nil(transaction.block_number) and not is_nil(transaction.index)
+              and transaction.to_address_hash != ^to_address_filter and transaction.from_address_hash != ^from_address_filter)
+        |> join_associations(necessity_by_association)
+        |> Transaction.put_has_token_transfers_to_tx(old_ui?)
+        |> (&if(old_ui?, do: preload(&1, [{:token_transfers, [:token, :from_address, :to_address]}]), else: &1)).()
+        |> select_repo(options).all()
+        |> (&if(old_ui?,
+              do: &1,
+              else:
+                Enum.map(&1, fn tx ->
+                  preload_token_transfers(tx, @token_transfers_necessity_by_association, options)
+                end)
+            )).()
+    end
   end
 
   # RAP - random access pagination
