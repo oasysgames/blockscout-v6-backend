@@ -1658,11 +1658,9 @@ defmodule Explorer.Chain do
   def list_blocks_for_home(options \\ []) when is_list(options) do
     necessity_by_association = Keyword.get(options, :necessity_by_association, %{})
     paging_options = Keyword.get(options, :paging_options) || @default_paging_options
-    block_type = Keyword.get(options, :block_type, "Block")
 
     newest_transactions = transactions_available_for_home(paging_options.page_size)
     newest_blocks = Enum.map(newest_transactions, fn wa -> wa.block_number end)
-    count = Enum.count(newest_blocks)
 
     case paging_options do
       %PagingOptions{key: {0}} ->
