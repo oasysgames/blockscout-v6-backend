@@ -38,7 +38,7 @@ See the [project documentation](https://docs.blockscout.com/) for instructions:
 
 ## Acknowledgements
 
-We would like to thank the [EthPrize foundation](http://ethprize.io/) for their funding support.
+We would like to thank the EthPrize foundation for their funding support.
 
 ## Contributing
 
@@ -49,18 +49,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and pull request protoco
 [![License: GPL v3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
-
-## How To Run
-
-1. Configure back-end ENV variables following [docs](https://docs.blockscout.com/for-developers/information-and-settings/env-variables)
-
-3. Configure docker compose [docker-compose.yml](/docker-compose/docker-compose.yml)
-
-4. Configure web-server `Access-Control-Allow-Origin` on file [default.conf.template](/docker-compose/proxy/default.conf.template)
-
-5. Start the docker with external frontend by running `FRONT_PROXY_PASS=http://host.docker.internal:3000 docker compose -f external-frontend.yml up -d` [docs](https://docs.blockscout.com/for-developers/deployment/frontend-migration/separate-frontend)
-
-
-
-
-

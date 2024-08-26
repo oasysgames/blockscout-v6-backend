@@ -386,6 +386,16 @@ defmodule EthereumJSONRPC do
     Keyword.fetch!(json_rpc_named_arguments, :variant).fetch_pending_transactions(json_rpc_named_arguments)
   end
 
+  @doc """
+  Retrieves raw traces from Ethereum JSON RPC variant API.
+  """
+  def fetch_transaction_raw_traces(transaction_params, json_rpc_named_arguments) do
+    Keyword.fetch!(json_rpc_named_arguments, :variant).fetch_transaction_raw_traces(
+      transaction_params,
+      json_rpc_named_arguments
+    )
+  end
+
   @spec fetch_transaction_receipts(
           [
             %{required(:gas) => non_neg_integer(), required(:hash) => hash, optional(atom) => any}
@@ -579,4 +589,44 @@ defmodule EthereumJSONRPC do
 
   defp chunk_requests(requests, nil), do: requests
   defp chunk_requests(requests, chunk_size), do: Enum.chunk_every(requests, chunk_size)
+
+  def put_if_present(result, transaction, keys) do
+    Enum.reduce(keys, result, fn key, acc ->
+      key_list = key |> Tuple.to_list()
+      from_key = Enum.at(key_list, 0)
+      to_key = Enum.at(key_list, 1)
+      opts = if Enum.count(key_list) > 2, do: Enum.at(key_list, 2), else: %{}
+
+      value = transaction[from_key]
+
+      validate_key(acc, to_key, value, opts)
+    end)
+  end
+
+  defp validate_key(acc, _to_key, nil, _opts), do: acc
+
+  defp validate_key(acc, to_key, value, %{:validation => validation}) do
+    case validation do
+      :address_hash ->
+        if address_correct?(value), do: Map.put(acc, to_key, value), else: acc
+
+      _ ->
+        Map.put(acc, to_key, value)
+    end
+  end
+
+  defp validate_key(acc, to_key, value, _validation) do
+    Map.put(acc, to_key, value)
+  end
+
+  # todo: The similar function exists in Indexer application:
+  # Here is the room for future refactoring to keep a single function.
+  @spec address_correct?(binary()) :: boolean()
+  defp address_correct?(address) when is_binary(address) do
+    String.match?(address, ~r/^0x[[:xdigit:]]{40}$/i)
+  end
+
+  defp address_correct?(_address) do
+    false
+  end
 end

@@ -6,6 +6,7 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
   alias BlockScoutWeb.API.RPC.{AddressController, Helper}
   alias Explorer.Chain
   alias Explorer.Chain.{Address, Hash, SmartContract}
+  alias Explorer.Chain.SmartContract.Proxy.Models.Implementation
   alias Explorer.Chain.SmartContract.Proxy.VerificationStatus, as: ProxyVerificationStatus
   alias Explorer.Chain.SmartContract.VerificationStatus
   alias Explorer.Etherscan.Contracts
@@ -15,6 +16,12 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
   alias Explorer.SmartContract.Vyper.Publisher, as: VyperPublisher
   alias Explorer.ThirdPartyIntegrations.Sourcify
   import BlockScoutWeb.API.V2.AddressController, only: [validate_address: 2, validate_address: 3]
+
+  if Application.compile_env(:explorer, :chain_type) == :zksync do
+    @optimization_runs "0"
+  else
+    @optimization_runs 200
+  end
 
   @smth_went_wrong "Something went wrong while publishing the contract"
   @verified "Smart-contract already verified."
@@ -230,13 +237,13 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
              api?: true
            ),
          {:not_found, false} <- {:not_found, is_nil(smart_contract)},
+         implementation_updated_at <- Implementation.get_proxy_implementation_updated_at(address_hash, []),
          {:time_interval, true} <-
-           {:time_interval,
-            SmartContract.check_implementation_refetch_necessity(smart_contract.implementation_fetched_at)},
+           {:time_interval, Implementation.check_implementation_refetch_necessity(implementation_updated_at)},
          uid <- ProxyVerificationStatus.generate_uid(address_hash) do
       ProxyVerificationStatus.insert_status(uid, :pending, address_hash)
 
-      SmartContract.get_implementation_address_hash(smart_contract,
+      Implementation.get_implementation(smart_contract,
         timeout: 0,
         uid: uid,
         callback: &ProxyVerificationStatus.set_proxy_verification_result/2
@@ -254,7 +261,7 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
         render(conn, :error, error: @restricted_access)
 
       {:time_interval, false} ->
-        render(conn, :error, error: "Only one attempt in #{SmartContract.get_fresh_time_distance()}ms")
+        render(conn, :error, error: "Only one attempt in #{Implementation.get_fresh_time_distance()}ms")
     end
   end
 
@@ -266,9 +273,20 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
         render(conn, :show, %{result: "Verification in progress"})
 
       :pass ->
+        implementation_address_hashes =
+          Implementation.get_proxy_implementations(submission.contract_address_hash, []).address_hashes
+
+        result =
+          if Enum.count(implementation_address_hashes) == 1 do
+            implementation_address_hash = Enum.at(implementation_address_hashes, 0)
+
+            "The proxy's (#{submission.contract_address_hash}) implementation contract is found at #{implementation_address_hash} and is successfully updated."
+          else
+            "The proxy's (#{submission.contract_address_hash}) implementation contracts are found at #{inspect(implementation_address_hashes)} and they've been successfully updated."
+          end
+
         render(conn, :show, %{
-          result:
-            "The proxy's (#{submission.contract_address_hash}) implementation contract is found at #{SmartContract.address_hash_to_smart_contract(submission.contract_address_hash).implementation_address_hash} and is successfully updated."
+          result: result
         })
 
       :fail ->
@@ -586,11 +604,11 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
     _ = PublishHelper.check_and_verify(Hash.to_string(address_hash))
 
     result =
-      case SmartContract.address_hash_to_smart_contract(address_hash) do
-        nil ->
+      case SmartContract.address_hash_to_smart_contract_with_bytecode_twin(address_hash) do
+        {nil, _} ->
           :not_found
 
-        contract ->
+        {contract, _} ->
           {:ok, SmartContract.preload_decompiled_smart_contract(contract)}
       end
 
@@ -649,7 +667,7 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
         {:ok, Map.put(opts, "optimization_runs", runs_int)}
 
       _ ->
-        {:ok, Map.put(opts, "optimization_runs", 200)}
+        {:ok, Map.put(opts, "optimization_runs", @optimization_runs)}
     end
   end
 
@@ -658,7 +676,7 @@ defmodule BlockScoutWeb.API.RPC.ContractController do
   end
 
   defp parse_optimization_runs({:ok, opts}) do
-    {:ok, Map.put(opts, "optimization_runs", 200)}
+    {:ok, Map.put(opts, "optimization_runs", @optimization_runs)}
   end
 
   defp parse_optimization_runs(other), do: other
