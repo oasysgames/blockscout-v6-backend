@@ -26,38 +26,19 @@ services:
     extends:
       file: ./services/backend.yml
       service: backend
-    build:
-      context: ..
-      dockerfile: ./docker/Dockerfile
-      args:
-        CACHE_EXCHANGE_RATES_PERIOD: ""
-        API_V1_READ_METHODS_DISABLED: "false"
-        DISABLE_WEBAPP: "false"
-        API_V1_WRITE_METHODS_DISABLED: "false"
-        CACHE_TOTAL_GAS_USAGE_COUNTER_ENABLED: ""
-        CACHE_ADDRESS_WITH_BALANCES_UPDATE_INTERVAL: ""
-        ADMIN_PANEL_ENABLED: ""
-        RELEASE_VERSION: 6.7.2
     links:
       - db:database
-    # environment:
-    #     ETHEREUM_JSONRPC_VARIANT: 'ganache'
-    #     ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
-    #     INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: 'true'
-    #     INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: 'true'
-    #     CHAIN_ID: '1337'
+    environment:
+        ETHEREUM_JSONRPC_VARIANT: 'ganache'
+        ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
+        INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: 'true'
+        INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: 'true'
+        CHAIN_ID: '1337'
 
   visualizer:
     extends:
       file: ./services/visualizer.yml
       service: visualizer
-  
-  sc-verifier:
-    extends:
-      file: ./services/smart-contract-verifier.yml
-      service: smart-contract-verifier
-    ports:
-      - 8082:8050
 
   sig-provider:
     extends:
@@ -97,7 +78,6 @@ services:
     depends_on:
       - backend
       - stats
-      - sc-verifier
     extends:
       file: ./services/nginx.yml
       service: proxy

@@ -14,7 +14,15 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
   """
   use BlockScoutWeb, :router
   alias BlockScoutWeb.AddressTransactionController
-  alias BlockScoutWeb.Routers.{APIKeyV2Router, SmartContractsApiV2Router, TokensApiV2Router, UtilsApiV2Router}
+
+  alias BlockScoutWeb.Routers.{
+    AddressBadgesApiV2Router,
+    APIKeyV2Router,
+    SmartContractsApiV2Router,
+    TokensApiV2Router,
+    UtilsApiV2Router
+  }
+
   alias BlockScoutWeb.Plug.{CheckApiV2, RateLimit}
   alias BlockScoutWeb.Routers.AccountRouter
 
@@ -25,6 +33,7 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
 
   forward("/v2/key", APIKeyV2Router)
   forward("/v2/utils", UtilsApiV2Router)
+  forward("/v2/scam-badge-addresses", AddressBadgesApiV2Router)
 
   pipeline :api do
     plug(
@@ -134,6 +143,10 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
         get("/optimism-batch/:batch_number", V2.TransactionController, :optimism_batch)
       end
 
+      if Application.compile_env(:explorer, :chain_type) == :scroll do
+        get("/scroll-batch/:batch_number", V2.TransactionController, :scroll_batch)
+      end
+
       if Application.compile_env(:explorer, :chain_type) == :suave do
         get("/execution-node/:execution_node_hash_param", V2.TransactionController, :execution_node)
       end
@@ -150,6 +163,15 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
         get("/:transaction_hash_param/blobs", V2.TransactionController, :blobs)
       end
     end
+
+    scope "/token-transfers" do
+      get("/", V2.TokenTransferController, :token_transfers)
+    end
+
+    # todo: enable this endpoint when DB index for underlying DB query will be installed.
+    # scope "/internal-transactions" do
+    #   get("/", V2.InternalTransactionController, :internal_transactions)
+    # end
 
     scope "/blocks" do
       get("/", V2.BlockController, :blocks)
@@ -169,6 +191,10 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
 
       if Application.compile_env(:explorer, :chain_type) == :optimism do
         get("/optimism-batch/:batch_number", V2.BlockController, :optimism_batch)
+      end
+
+      if Application.compile_env(:explorer, :chain_type) == :scroll do
+        get("/scroll-batch/:batch_number", V2.BlockController, :scroll_batch)
       end
     end
 
@@ -234,9 +260,9 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
 
     scope "/optimism" do
       if Application.compile_env(:explorer, :chain_type) == :optimism do
-        get("/txn-batches", V2.OptimismController, :txn_batches)
-        get("/txn-batches/count", V2.OptimismController, :txn_batches_count)
-        get("/txn-batches/:l2_block_range_start/:l2_block_range_end", V2.OptimismController, :txn_batches)
+        get("/txn-batches", V2.OptimismController, :transaction_batches)
+        get("/txn-batches/count", V2.OptimismController, :transaction_batches_count)
+        get("/txn-batches/:l2_block_range_start/:l2_block_range_end", V2.OptimismController, :transaction_batches)
         get("/batches", V2.OptimismController, :batches)
         get("/batches/count", V2.OptimismController, :batches_count)
         get("/batches/da/celestia/:height/:commitment", V2.OptimismController, :batch_by_celestia_blob)
@@ -258,6 +284,18 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
         get("/deposits/count", V2.PolygonEdgeController, :deposits_count)
         get("/withdrawals", V2.PolygonEdgeController, :withdrawals)
         get("/withdrawals/count", V2.PolygonEdgeController, :withdrawals_count)
+      end
+    end
+
+    scope "/scroll" do
+      if Application.compile_env(:explorer, :chain_type) == :scroll do
+        get("/batches", V2.ScrollController, :batches)
+        get("/batches/count", V2.ScrollController, :batches_count)
+        get("/batches/:number", V2.ScrollController, :batch)
+        get("/deposits", V2.ScrollController, :deposits)
+        get("/deposits/count", V2.ScrollController, :deposits_count)
+        get("/withdrawals", V2.ScrollController, :withdrawals)
+        get("/withdrawals/count", V2.ScrollController, :withdrawals_count)
       end
     end
 
@@ -315,6 +353,10 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
         get("/wallets/:address_hash_param/portfolio", V2.Proxy.ZerionController, :wallet_portfolio)
       end
 
+      scope "/xname" do
+        get("/addresses/:address_hash_param", V2.Proxy.XnameController, :address)
+      end
+
       scope "/metadata" do
         get("/addresses", V2.Proxy.MetadataController, :addresses)
       end
@@ -327,11 +369,21 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
     end
 
     scope "/validators" do
-      if Application.compile_env(:explorer, :chain_type) == :stability do
-        scope "/stability" do
-          get("/", V2.ValidatorController, :stability_validators_list)
-          get("/counters", V2.ValidatorController, :stability_validators_counters)
-        end
+      case Application.compile_env(:explorer, :chain_type) do
+        :stability ->
+          scope "/stability" do
+            get("/", V2.ValidatorController, :stability_validators_list)
+            get("/counters", V2.ValidatorController, :stability_validators_counters)
+          end
+
+        :blackfort ->
+          scope "/blackfort" do
+            get("/", V2.ValidatorController, :blackfort_validators_list)
+            get("/counters", V2.ValidatorController, :blackfort_validators_counters)
+          end
+
+        _ ->
+          nil
       end
     end
 
@@ -348,6 +400,8 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
         get("/worlds", V2.MudController, :worlds)
         get("/worlds/count", V2.MudController, :worlds_count)
         get("/worlds/:world/tables", V2.MudController, :world_tables)
+        get("/worlds/:world/systems", V2.MudController, :world_systems)
+        get("/worlds/:world/systems/:system", V2.MudController, :world_system)
         get("/worlds/:world/tables/count", V2.MudController, :world_tables_count)
         get("/worlds/:world/tables/:table_id/records", V2.MudController, :world_table_records)
         get("/worlds/:world/tables/:table_id/records/count", V2.MudController, :world_table_records_count)
@@ -363,7 +417,12 @@ defmodule BlockScoutWeb.Routers.ApiRouter do
         get("/batches/count", V2.ArbitrumController, :batches_count)
         get("/batches/:batch_number", V2.ArbitrumController, :batch)
         get("/batches/da/anytrust/:data_hash", V2.ArbitrumController, :batch_by_data_availability_info)
-        get("/batches/da/celestia/:height/:tx_commitment", V2.ArbitrumController, :batch_by_data_availability_info)
+
+        get(
+          "/batches/da/celestia/:height/:transaction_commitment",
+          V2.ArbitrumController,
+          :batch_by_data_availability_info
+        )
       end
     end
 

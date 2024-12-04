@@ -163,7 +163,7 @@ defmodule BlockScoutWeb.Notifier do
     Endpoint.broadcast("transactions:#{transaction_hash}", "raw_trace", %{raw_trace_origin: transaction_hash})
   end
 
-  # internal txs broadcast disabled on the indexer level, therefore it out of scope of the refactoring within https://github.com/blockscout/blockscout/pull/7474
+  # internal transactions broadcast disabled on the indexer level, therefore it out of scope of the refactoring within https://github.com/blockscout/blockscout/pull/7474
   def handle_event({:chain_event, :internal_transactions, :realtime, internal_transactions}) do
     internal_transactions
     |> Stream.map(
@@ -181,8 +181,8 @@ defmodule BlockScoutWeb.Notifier do
         DenormalizationHelper.extend_transaction_preload([
           :token,
           :transaction,
-          from_address: [:names, :smart_contract, :proxy_implementations],
-          to_address: [:names, :smart_contract, :proxy_implementations]
+          from_address: [:scam_badge, :names, :smart_contract, :proxy_implementations],
+          to_address: [:scam_badge, :names, :smart_contract, :proxy_implementations]
         ])
       )
 
@@ -205,9 +205,9 @@ defmodule BlockScoutWeb.Notifier do
   def handle_event({:chain_event, :transactions, :realtime, transactions}) do
     base_preloads = [
       :block,
-      created_contract_address: [:names, :smart_contract, :proxy_implementations],
-      from_address: [:names, :smart_contract, :proxy_implementations],
-      to_address: [:names, :smart_contract, :proxy_implementations]
+      created_contract_address: [:scam_badge, :names, :smart_contract, :proxy_implementations],
+      from_address: [:scam_badge, :names, :smart_contract, :proxy_implementations],
+      to_address: [:scam_badge, :names, :smart_contract, :proxy_implementations]
     ]
 
     preloads = if API_V2.enabled?(), do: [:token_transfers | base_preloads], else: base_preloads
@@ -215,9 +215,9 @@ defmodule BlockScoutWeb.Notifier do
     transactions
     |> Repo.preload(preloads)
     |> broadcast_transactions_websocket_v2()
-    |> Enum.map(fn tx ->
+    |> Enum.map(fn transaction ->
       # Disable parsing of token transfers from websocket for transaction tab because we display token transfers at a separate tab
-      Map.put(tx, :token_transfers, [])
+      Map.put(transaction, :token_transfers, [])
     end)
     |> Enum.each(&broadcast_transaction/1)
   end

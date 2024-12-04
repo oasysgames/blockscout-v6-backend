@@ -167,6 +167,16 @@ defmodule Explorer.Repo do
     end
   end
 
+  defmodule Scroll do
+    use Ecto.Repo,
+      otp_app: :explorer,
+      adapter: Ecto.Adapters.Postgres
+
+    def init(_, opts) do
+      ConfigHelper.init_repo_module(__MODULE__, opts)
+    end
+  end
+
   defmodule ZkSync do
     use Ecto.Repo,
       otp_app: :explorer,
@@ -278,6 +288,16 @@ defmodule Explorer.Repo do
   end
 
   defmodule ShrunkInternalTransactions do
+    use Ecto.Repo,
+      otp_app: :explorer,
+      adapter: Ecto.Adapters.Postgres
+
+    def init(_, opts) do
+      ConfigHelper.init_repo_module(__MODULE__, opts)
+    end
+  end
+
+  defmodule Blackfort do
     use Ecto.Repo,
       otp_app: :explorer,
       adapter: Ecto.Adapters.Postgres

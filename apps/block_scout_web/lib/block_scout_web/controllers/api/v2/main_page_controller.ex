@@ -24,9 +24,9 @@ defmodule BlockScoutWeb.API.V2.MainPageController do
     necessity_by_association:
       %{
         :block => :required,
-        [created_contract_address: [:names, :smart_contract, :proxy_implementations]] => :optional,
-        [from_address: [:names, :smart_contract, :proxy_implementations]] => :optional,
-        [to_address: [:names, :smart_contract, :proxy_implementations]] => :optional
+        [created_contract_address: [:scam_badge, :names, :smart_contract, :proxy_implementations]] => :optional,
+        [from_address: [:scam_badge, :names, :smart_contract, :proxy_implementations]] => :optional,
+        [to_address: [:scam_badge, :names, :smart_contract, :proxy_implementations]] => :optional
       }
       |> Map.merge(@chain_type_transaction_necessity_by_association),
     paging_options: %PagingOptions{page_size: 6},
@@ -38,7 +38,7 @@ defmodule BlockScoutWeb.API.V2.MainPageController do
   def blocks(conn, _params) do
     blocks =
       [paging_options: %PagingOptions{page_size: 4}, api?: true]
-      |> Chain.list_blocks_for_home()
+      |> Chain.list_blocks()
       |> Repo.replica().preload([[miner: [:names, :smart_contract, :proxy_implementations]], :transactions, :rewards])
 
     conn
@@ -61,7 +61,7 @@ defmodule BlockScoutWeb.API.V2.MainPageController do
   end
 
   def transactions(conn, _params) do
-    recent_transactions = Chain.recent_collated_transactions_for_home(false, @transactions_options)
+    recent_transactions = Chain.recent_collated_transactions(false, @transactions_options)
 
     conn
     |> put_status(200)
