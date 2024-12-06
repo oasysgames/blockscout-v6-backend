@@ -1652,9 +1652,12 @@ defmodule Explorer.Chain do
     end
   end
 
+  def get_op_node_to_address, do: System.get_env("OP_NODE_TO_ADDRESS") || @op_node_to_address_hash
+  def get_op_node_from_address, do: System.get_env("OP_NODE_FROM_ADDRESS") || @op_node_from_address_hash
+  
   def transactions_available_for_home(page_size) do
-    {:ok, to_address_filter} = Chain.string_to_address_hash(@op_node_to_address_hash)
-    {:ok, from_address_filter} = Chain.string_to_address_hash(@op_node_from_address_hash)
+    {:ok, to_address_filter} = Chain.string_to_address_hash(get_op_node_to_address())
+    {:ok, from_address_filter} = Chain.string_to_address_hash(get_op_node_from_address())
 
     Transaction
     |> where([transaction], not is_nil(transaction.block_number) and not is_nil(transaction.index)
@@ -2691,8 +2694,8 @@ defmodule Explorer.Chain do
       when is_list(options) do
     necessity_by_association = Keyword.get(options, :necessity_by_association, %{})
     paging_options = Keyword.get(options, :paging_options, @default_paging_options)
-    {:ok, to_address_filter} = Chain.string_to_address_hash(@op_node_to_address_hash)
-    {:ok, from_address_filter} = Chain.string_to_address_hash(@op_node_from_address_hash)
+    {:ok, to_address_filter} = Chain.string_to_address_hash(get_op_node_to_address())
+    {:ok, from_address_filter} = Chain.string_to_address_hash(get_op_node_from_address())
 
     case paging_options do
       %PagingOptions{key: {0, 0}, is_index_in_asc_order: false} ->
