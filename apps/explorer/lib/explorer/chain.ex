@@ -2694,29 +2694,17 @@ defmodule Explorer.Chain do
       when is_list(options) do
     necessity_by_association = Keyword.get(options, :necessity_by_association, %{})
     paging_options = Keyword.get(options, :paging_options, @default_paging_options)
-    {:ok, to_address_filter} = Chain.string_to_address_hash(get_op_node_to_address())
-    {:ok, from_address_filter} = Chain.string_to_address_hash(get_op_node_from_address())
+    method_id_filter = Keyword.get(options, :method)
+    type_filter = Keyword.get(options, :type)
 
-    case paging_options do
-      %PagingOptions{key: {0, 0}, is_index_in_asc_order: false} ->
-        []
-      _ ->
-        paging_options
-        |> Transaction.fetch_transactions()
-        |> where([transaction], not is_nil(transaction.block_number) and not is_nil(transaction.index)
-              and transaction.to_address_hash != ^to_address_filter and transaction.from_address_hash != ^from_address_filter)
-        |> join_associations(necessity_by_association)
-        |> Transaction.put_has_token_transfers_to_tx(old_ui?)
-        |> (&if(old_ui?, do: preload(&1, [{:token_transfers, [:token, :from_address, :to_address]}]), else: &1)).()
-        |> select_repo(options).all()
-        |> (&if(old_ui?,
-              do: &1,
-              else:
-                Enum.map(&1, fn tx ->
-                  preload_token_transfers(tx, @token_transfers_necessity_by_association, options)
-                end)
-            )).()
-    end
+    fetch_recent_collated_transactions_for_home(
+      old_ui?,
+      paging_options,
+      necessity_by_association,
+      method_id_filter,
+      type_filter,
+      options
+    )
   end
 
   def fetch_recent_collated_transactions_for_rap(paging_options, necessity_by_association) do
@@ -2756,6 +2744,43 @@ defmodule Explorer.Chain do
         paging_options
         |> Transaction.fetch_transactions()
         |> where([transaction], not is_nil(transaction.block_number) and not is_nil(transaction.index))
+        |> apply_filter_by_method_id_to_transactions(method_id_filter)
+        |> apply_filter_by_type_to_transactions(type_filter)
+        |> join_associations(necessity_by_association)
+        |> Transaction.put_has_token_transfers_to_transaction(old_ui?)
+        |> (&if(old_ui?, do: preload(&1, [{:token_transfers, [:token, :from_address, :to_address]}]), else: &1)).()
+        |> select_repo(options).all()
+        |> (&if(old_ui?,
+              do: &1,
+              else:
+                Enum.map(&1, fn transaction ->
+                  preload_token_transfers(transaction, @token_transfers_necessity_by_association, options)
+                end)
+            )).()
+    end
+  end
+
+  def fetch_recent_collated_transactions_for_home(
+        old_ui?,
+        paging_options,
+        necessity_by_association,
+        method_id_filter,
+        type_filter,
+        options
+      ) do
+      
+    {:ok, to_address_filter} = Chain.string_to_address_hash(get_op_node_to_address())
+    {:ok, from_address_filter} = Chain.string_to_address_hash(get_op_node_from_address())
+    
+    case paging_options do
+      %PagingOptions{key: {0, 0}, is_index_in_asc_order: false} ->
+        []
+
+      _ ->
+        paging_options
+        |> Transaction.fetch_transactions()
+        |> where([transaction], not is_nil(transaction.block_number) and not is_nil(transaction.index)
+              and transaction.to_address_hash != ^to_address_filter and transaction.from_address_hash != ^from_address_filter)
         |> apply_filter_by_method_id_to_transactions(method_id_filter)
         |> apply_filter_by_type_to_transactions(type_filter)
         |> join_associations(necessity_by_association)
