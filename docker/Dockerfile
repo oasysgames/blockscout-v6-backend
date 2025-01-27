@@ -40,6 +40,7 @@ ADD apps/ethereum_jsonrpc/mix.exs ./apps/ethereum_jsonrpc/
 ADD apps/indexer/mix.exs ./apps/indexer/
 
 ENV MIX_HOME=/opt/mix
+ENV ERL_AFLAGS="+JMsingle true"
 RUN mix local.hex --force
 RUN mix do deps.get, local.rebar --force, deps.compile
 
