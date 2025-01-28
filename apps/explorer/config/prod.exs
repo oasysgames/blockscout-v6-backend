@@ -34,6 +34,11 @@ config :explorer, Explorer.Repo.PolygonZkevm,
   timeout: :timer.seconds(60),
   ssl_opts: [verify: :verify_none]
 
+config :explorer, Explorer.Repo.Scroll,
+  prepare: :unnamed,
+  timeout: :timer.seconds(60),
+  ssl_opts: [verify: :verify_none]
+
 config :explorer, Explorer.Repo.ZkSync,
   prepare: :unnamed,
   timeout: :timer.seconds(60),
@@ -90,6 +95,11 @@ config :explorer, Explorer.Repo.Mud,
   ssl_opts: [verify: :verify_none]
 
 config :explorer, Explorer.Repo.ShrunkInternalTransactions,
+  prepare: :unnamed,
+  timeout: :timer.seconds(60),
+  ssl_opts: [verify: :verify_none]
+
+config :explorer, Explorer.Repo.Blackfort,
   prepare: :unnamed,
   timeout: :timer.seconds(60),
   ssl_opts: [verify: :verify_none]

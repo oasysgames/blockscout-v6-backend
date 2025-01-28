@@ -24,7 +24,7 @@ defmodule Explorer.Mixfile do
         dialyzer: :test
       ],
       start_permanent: Mix.env() == :prod,
-      version: "6.8.0",
+      version: "6.9.2",
       xref: [exclude: [BlockScoutWeb.Routers.WebRouter.Helpers, Indexer.Helper]]
     ]
   end
@@ -110,7 +110,7 @@ defmodule Explorer.Mixfile do
       # `:spandex` tracing of `:ecto`
       {:spandex_ecto, "~> 0.7.0"},
       # Attach `:prometheus_ecto` to `:ecto`
-      {:telemetry, "~> 1.2.1"},
+      {:telemetry, "~> 1.3.0"},
       # `Timex.Duration` for `Explorer.Counters.AverageBlockTime.average_block_time/0`
       {:timex, "~> 3.7.1"},
       {:con_cache, "~> 1.0"},
@@ -122,7 +122,13 @@ defmodule Explorer.Mixfile do
       {:logger_json, "~> 5.1"},
       {:typed_ecto_schema, "~> 0.4.1", runtime: false},
       {:ueberauth, "~> 0.7"},
-      {:recon, "~> 2.5"}
+      {:recon, "~> 2.5"},
+      {:varint, "~> 1.4"},
+      {:blake2, "~> 1.0"},
+      {:ueberauth_auth0, "~> 2.0"},
+      {:oauth2, "~> 2.0"},
+      {:siwe, github: "royal-markets/siwe-ex", ref: "51c9c08240eb7eea3c35693011f8d260cd9bb3be"},
+      {:joken, "~> 2.6"}
     ]
   end
 

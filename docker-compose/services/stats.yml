@@ -21,7 +21,7 @@ services:
     environment:
         POSTGRES_DB: 'stats'
         POSTGRES_USER: 'stats'
-        POSTGRES_PASSWORD: 'dummy_password'
+        POSTGRES_PASSWORD: 'n0uejXPl61ci6ldCuE2gQU5Y'
     ports:
       - target: 5432
         published: 7433
@@ -50,3 +50,4 @@ services:
       - STATS__CREATE_DATABASE=${STATS__CREATE_DATABASE:-true}
       - STATS__RUN_MIGRATIONS=${STATS__RUN_MIGRATIONS:-true}
       - STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL=OAS
+      - STATS__IGNORE_BLOCKSCOUT_API_ABSENCE=true

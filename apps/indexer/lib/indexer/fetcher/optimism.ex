@@ -56,7 +56,7 @@ defmodule Indexer.Fetcher.Optimism do
   """
   @spec get_block_check_interval(list()) :: {:ok, non_neg_integer(), non_neg_integer()} | {:error, any()}
   def get_block_check_interval(json_rpc_named_arguments) do
-    {last_safe_block, _} = get_safe_block(json_rpc_named_arguments)
+    {last_safe_block, _} = Helper.get_safe_block(json_rpc_named_arguments)
 
     first_block = max(last_safe_block - @block_check_interval_range_size, 1)
 
@@ -89,26 +89,6 @@ defmodule Indexer.Fetcher.Optimism do
       error_message,
       retries
     )
-  end
-
-  @doc """
-  Tries to get `safe` block number from the RPC node.
-  If it's not available, gets the `latest` one.
-  Returns a tuple of `{block_number, is_latest}`
-  where `is_latest` is true if the `safe` is not available.
-  """
-  @spec get_safe_block(list()) :: {non_neg_integer(), boolean()}
-  def get_safe_block(json_rpc_named_arguments) do
-    case get_block_number_by_tag("safe", json_rpc_named_arguments) do
-      {:ok, safe_block} ->
-        {safe_block, false}
-
-      {:error, :not_found} ->
-        {:ok, latest_block} =
-          get_block_number_by_tag("latest", json_rpc_named_arguments, Helper.infinite_retries_number())
-
-        {latest_block, true}
-    end
   end
 
   defp get_block_timestamp_by_number_inner(number, json_rpc_named_arguments) do
@@ -249,7 +229,7 @@ defmodule Indexer.Fetcher.Optimism do
 
     optimism_env = Application.get_all_env(:indexer)[__MODULE__]
     system_config = optimism_env[:optimism_l1_system_config]
-    optimism_l1_rpc = optimism_env[:optimism_l1_rpc]
+    optimism_l1_rpc = l1_rpc_url()
 
     with {:system_config_valid, true} <- {:system_config_valid, Helper.address_correct?(system_config)},
          {:reorg_monitor_started, true} <-
@@ -264,8 +244,9 @@ defmodule Indexer.Fetcher.Optimism do
          {last_l1_block_number, last_l1_transaction_hash} <- caller.get_last_l1_item(),
          {:start_block_l1_valid, true} <-
            {:start_block_l1_valid, start_block_l1 <= last_l1_block_number || last_l1_block_number == 0},
-         {:ok, last_l1_tx} <- get_transaction_by_hash(last_l1_transaction_hash, json_rpc_named_arguments),
-         {:l1_tx_not_found, false} <- {:l1_tx_not_found, !is_nil(last_l1_transaction_hash) && is_nil(last_l1_tx)},
+         {:ok, last_l1_transaction} <- get_transaction_by_hash(last_l1_transaction_hash, json_rpc_named_arguments),
+         {:l1_transaction_not_found, false} <-
+           {:l1_transaction_not_found, !is_nil(last_l1_transaction_hash) && is_nil(last_l1_transaction)},
          {:ok, block_check_interval, last_safe_block} <- get_block_check_interval(json_rpc_named_arguments) do
       contract_address =
         if caller == Indexer.Fetcher.Optimism.WithdrawalEvent do
@@ -318,7 +299,7 @@ defmodule Indexer.Fetcher.Optimism do
 
         {:stop, :normal, %{}}
 
-      {:l1_tx_not_found, true} ->
+      {:l1_transaction_not_found, true} ->
         Logger.error(
           "Cannot find last L1 transaction from RPC by its hash. Probably, there was a reorg on L1 chain. Please, check #{table_name} table."
         )
@@ -377,5 +358,26 @@ defmodule Indexer.Fetcher.Optimism do
       _ ->
         nil
     end
+  end
+
+  @doc """
+    Returns L1 RPC URL for an OP module.
+  """
+  @spec l1_rpc_url() :: binary() | nil
+  def l1_rpc_url do
+    Application.get_all_env(:indexer)[__MODULE__][:optimism_l1_rpc]
+  end
+
+  @doc """
+    Determines if `Indexer.Fetcher.RollupL1ReorgMonitor` module must be up
+    before an OP fetcher starts.
+
+    ## Returns
+    - `true` if the reorg monitor must be active, `false` otherwise.
+  """
+  @spec requires_l1_reorg_monitor?() :: boolean()
+  def requires_l1_reorg_monitor? do
+    optimism_config = Application.get_all_env(:indexer)[__MODULE__]
+    not is_nil(optimism_config[:optimism_l1_system_config])
   end
 end

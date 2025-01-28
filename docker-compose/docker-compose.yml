@@ -26,6 +26,7 @@ services:
     extends:
       file: ./services/backend.yml
       service: backend
+    image: blockscout-backend:v6.9.2-beta
     build:
       context: ..
       dockerfile: ./docker/Dockerfile
@@ -37,26 +38,19 @@ services:
         CACHE_TOTAL_GAS_USAGE_COUNTER_ENABLED: ""
         CACHE_ADDRESS_WITH_BALANCES_UPDATE_INTERVAL: ""
         ADMIN_PANEL_ENABLED: ""
-        RELEASE_VERSION: 6.8.0
+        RELEASE_VERSION: 6.9.2
     links:
       - db:database
-    environment:
-        # ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
-        # ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
-        # ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
-        # CHAIN_ID: '1337'
+    # environment:
+    #     ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
+    #     ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
+    #     ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
+    #     CHAIN_ID: '1337'
 
   visualizer:
     extends:
       file: ./services/visualizer.yml
       service: visualizer
-
-  sc-verifier:
-    extends:
-      file: ./services/smart-contract-verifier.yml
-      service: smart-contract-verifier
-    ports:
-      - 8082:8050
 
   sig-provider:
     extends:
@@ -104,7 +98,6 @@ services:
       - backend
       - frontend
       - stats
-      - sc-verifier
     extends:
       file: ./services/nginx.yml
       service: proxy

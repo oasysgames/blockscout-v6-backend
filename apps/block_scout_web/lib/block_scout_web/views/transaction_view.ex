@@ -11,7 +11,7 @@ defmodule BlockScoutWeb.TransactionView do
   alias Explorer.ExchangeRates.Token
   alias Timex.Duration
 
-  import BlockScoutWeb.Gettext
+  use Gettext, backend: BlockScoutWeb.Gettext
   import BlockScoutWeb.AddressView, only: [from_address_hash: 1, short_token_id: 2, tag_name_to_label: 1]
   import BlockScoutWeb.Tokens.Helper
 
@@ -395,8 +395,7 @@ defmodule BlockScoutWeb.TransactionView do
   end
 
   def decoded_input_data(transaction) do
-    {result, _, _} = Transaction.decoded_input_data(transaction, [])
-    result
+    Transaction.decoded_input_data(transaction, [])
   end
 
   def decoded_revert_reason(revert_reason, transaction, options) do
