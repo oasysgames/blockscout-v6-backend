@@ -1,0 +1,1 @@
+bash ./migrate_process.sh -t 'contract_methods','contract_verification_status','decompiled_smart_contracts','smart_contracts','smart_contracts_additional_sources','addresses','address_names'
