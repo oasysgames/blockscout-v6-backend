@@ -26,6 +26,7 @@ services:
     extends:
       file: ./services/backend.yml
       service: backend
+    image: blockscout-backend:v6.10.2
     build:
       context: ..
       dockerfile: ./docker/Dockerfile
@@ -33,11 +34,11 @@ services:
         RELEASE_VERSION: 7.0.0
     links:
       - db:database
-    environment:
-        ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
-        ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
-        ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
-        CHAIN_ID: '1337'
+    # environment:
+    #     ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
+    #     ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
+    #     ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
+    #     CHAIN_ID: '1337'
 
   nft_media_handler:
     depends_on:
